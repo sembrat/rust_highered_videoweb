@@ -9,11 +9,12 @@ use regex::Regex;
 use scraper::{Html, Selector};
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let input_file_name = "resource/hd2023.csv";
     let output_file_name = "resource/crawler.csv";
     let parent_dir = "output";
 
     // Step 1: Create crawler.csv if it doesn't exist
-    create_crawler_csv(output_file_name)?;
+    create_crawler_csv(input_file_name, output_file_name)?;
 
     // Step 2: Create output folders if they don't exist
     create_output_folders(output_file_name, parent_dir)?;
@@ -24,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn create_crawler_csv(output_file_name: &str) -> Result<(), Box<dyn Error>> {
+fn create_crawler_csv(input_file_name: &str, output_file_name: &str) -> Result<(), Box<dyn Error>> {
     // Skip creation if the CSV already exists
     if Path::new(output_file_name).exists() {
         println!("{} already exists. Skipping creation.", output_file_name);
@@ -34,7 +35,7 @@ fn create_crawler_csv(output_file_name: &str) -> Result<(), Box<dyn Error>> {
     // Open the input CSV file
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_path("resource/hd2023.csv")?;
+        .from_path(input_file_name)?;
 
     // Create the output CSV file
     let mut wtr = WriterBuilder::new()
@@ -59,8 +60,6 @@ fn create_crawler_csv(output_file_name: &str) -> Result<(), Box<dyn Error>> {
             Ok(record) => {
                 if let Some(raw_url) = record.get(webaddr_index) {
                     if let Ok(url) = str::from_utf8(raw_url) {
-                        assert_eq!(url.is_empty(), continue);
-                        println!("Processing: {}", url);
                         match ensure_https_scheme(url) {
                             Ok(full_url) => {
                                 if let Some(instnm) = record.get(instnm_index) {
