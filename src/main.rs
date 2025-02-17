@@ -34,7 +34,7 @@ fn create_crawler_csv(output_file_name: &str) -> Result<(), Box<dyn Error>> {
     // Open the input CSV file
     let mut rdr = ReaderBuilder::new()
         .has_headers(true)
-        .from_path("path/to/your/input_file.csv")?;
+        .from_path("resource/hd2023.csv")?;
 
     // Create the output CSV file
     let mut wtr = WriterBuilder::new()
@@ -59,6 +59,8 @@ fn create_crawler_csv(output_file_name: &str) -> Result<(), Box<dyn Error>> {
             Ok(record) => {
                 if let Some(raw_url) = record.get(webaddr_index) {
                     if let Ok(url) = str::from_utf8(raw_url) {
+                        assert_eq!(url.is_empty(), continue);
+                        println!("Processing: {}", url);
                         match ensure_https_scheme(url) {
                             Ok(full_url) => {
                                 if let Some(instnm) = record.get(instnm_index) {
