@@ -7,6 +7,7 @@ use std::path::Path;
 use reqwest;
 use regex::Regex;
 use scraper::{Html, Selector};
+use std::io::Write;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input_file_name = "resource/hd2023.csv";
@@ -21,6 +22,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Step 3: Process videos in HTML files
     process_videos_in_html(parent_dir)?;
+
+    // Step 4: Download videos from the source
+    download_videos(parent_dir)?;
 
     Ok(())
 }
@@ -198,6 +202,77 @@ fn save_video_elements(video_elements: &[String], output_dir: &Path) -> Result<(
     }
     Ok(())
 }
+
+fn download_videos(parent_dir: &str) -> Result<(), Box<dyn Error>> {
+    // Iterate through each subdirectory in the parent directory
+    for entry in fs::read_dir(parent_dir)? {
+        let entry = entry?;
+        let subdir_path = entry.path();
+        if subdir_path.is_dir() {
+            for video_file in fs::read_dir(&subdir_path)? {
+                let video_file = video_file?;
+                let video_file_path = video_file.path();
+                if video_file_path.is_file() && video_file_path.file_name().unwrap().to_str().unwrap().starts_with("video_") {
+                    let video_html = fs::read_to_string(&video_file_path)?;
+                    let document = Html::parse_document(&video_html);
+                    let video_selector = Selector::parse("video").unwrap();
+                    let iframe_selector = Selector::parse("iframe").unwrap();
+
+                    if let Some(video_element) = document.select(&video_selector).next() {
+                        if let Some(src) = video_element.value().attr("src") {
+                            let video_url = ensure_https_scheme(src)?;
+                            let video_filename = Path::new(src).file_name().unwrap().to_str().unwrap();
+                            let video_output_path = subdir_path.join(video_filename);
+
+                            // Skip downloading if the video file already exists
+                            if video_output_path.exists() {
+                                println!("{} already exists. Skipping download.", video_output_path.display());
+                                continue;
+                            }
+
+                            download_video(&video_url, &video_output_path)?;
+                        }
+                    } else if let Some(iframe_element) = document.select(&iframe_selector).next() {
+                        if let Some(src) = iframe_element.value().attr("src") {
+                            if src.contains("vimeo.com") {
+                                let vimeo_url = ensure_https_scheme(src)?;
+                                let vimeo_id = vimeo_url.path_segments().unwrap().last().unwrap();
+                                let vimeo_api_url = format!("https://player.vimeo.com/video/{}/config", vimeo_id);
+
+                                let response = reqwest::blocking::get(&vimeo_api_url)?;
+                                let vimeo_data: serde_json::Value = response.json()?;
+                                let video_src = vimeo_data["request"]["files"]["progressive"]["url"].as_str().unwrap();
+                                let video_filename = format!("vimeo_{}.mp4", vimeo_id);
+                                let video_output_path = subdir_path.join(video_filename);
+
+                                // Skip downloading if the video file already exists
+                                if video_output_path.exists() {
+                                    println!("{} already exists. Skipping download.", video_output_path.display());
+                                    continue;
+                                }
+
+                                download_video(video_src, &video_output_path)?;
+                            } else {
+                                println!("Video source URL for further examination: {}", src);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn download_video(video_url: &str, output_path: &Path) -> Result<(), Box<dyn Error>> {
+    let response = reqwest::blocking::get(video_url)?;
+    let mut file = fs::File::create(output_path)?;
+    let mut content = response.bytes()?;
+    file.write_all(&mut content)?;
+    println!("Downloaded video from {} to {}", video_url, output_path.display());
+    Ok(())
+}
+
 
 fn ensure_https_scheme(url: &str) -> Result<Url, ParseError> {
     let parsed_url = Url::parse(url);
