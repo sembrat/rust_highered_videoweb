@@ -8,6 +8,7 @@ use reqwest;
 use regex::Regex;
 use scraper::{Html, Selector};
 use std::io::Write;
+use serde_json::Value;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let input_file_name = "resource/hd2023.csv";
@@ -230,7 +231,7 @@ fn download_videos(parent_dir: &str) -> Result<(), Box<dyn Error>> {
                                 continue;
                             }
 
-                            download_video(&video_url, &video_output_path)?;
+                            download_video(video_url.as_str(), &video_output_path)?;
                         }
                     } else if let Some(iframe_element) = document.select(&iframe_selector).next() {
                         if let Some(src) = iframe_element.value().attr("src") {
@@ -240,7 +241,7 @@ fn download_videos(parent_dir: &str) -> Result<(), Box<dyn Error>> {
                                 let vimeo_api_url = format!("https://player.vimeo.com/video/{}/config", vimeo_id);
 
                                 let response = reqwest::blocking::get(&vimeo_api_url)?;
-                                let vimeo_data: serde_json::Value = response.json()?;
+                                let vimeo_data: Value = response.json()?;
                                 let video_src = vimeo_data["request"]["files"]["progressive"]["url"].as_str().unwrap();
                                 let video_filename = format!("vimeo_{}.mp4", vimeo_id);
                                 let video_output_path = subdir_path.join(video_filename);
@@ -272,7 +273,6 @@ fn download_video(video_url: &str, output_path: &Path) -> Result<(), Box<dyn Err
     println!("Downloaded video from {} to {}", video_url, output_path.display());
     Ok(())
 }
-
 
 fn ensure_https_scheme(url: &str) -> Result<Url, ParseError> {
     let parsed_url = Url::parse(url);
