@@ -5,6 +5,7 @@ use std::str;
 use std::fs;
 use std::path::Path;
 use reqwest;
+use regex::Regex;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let output_file_name = "resource/crawler.csv";
@@ -105,9 +106,10 @@ fn create_output_folders(output_file_name: &str, parent_dir: &str) -> Result<(),
                             Ok(full_url) => {
                                 if let Some(instnm) = record.get(instnm_index) {
                                     let instnm_str = str::from_utf8(instnm).unwrap_or("Invalid UTF-8");
+                                    let sanitized_instnm = sanitize_folder_name(instnm_str.trim());
 
                                     // Create folder named after INSTNM inside the parent directory if it doesn't exist
-                                    let folder_name = format!("{}/{}", parent_dir, instnm_str.trim());
+                                    let folder_name = format!("{}/{}", parent_dir, sanitized_instnm);
                                     let html_output_path = format!("{}/index.html", folder_name);
 
                                     // Skip fetching if the folder and HTML output already exist
@@ -156,4 +158,10 @@ fn fetch_html(url: &Url) -> Result<String, reqwest::Error> {
     let response = reqwest::blocking::get(url.as_str())?;
     let html = response.text()?;
     Ok(html)
+}
+
+fn sanitize_folder_name(name: &str) -> String {
+    let re = Regex::new(r"[^\w\s-]").unwrap();
+    let sanitized_name = re.replace_all(name, "").to_string();
+    sanitized_name.replace(" ", "_")
 }
